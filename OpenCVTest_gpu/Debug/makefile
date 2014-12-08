@@ -43,7 +43,7 @@ all: OpenCVTest_gpu
 OpenCVTest_gpu: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C++ Linker'
-	g++  -o "OpenCVTest_gpu" $(OBJS) $(USER_OBJS) $(LIBS)
+	g++ -L/opt/lib -o "OpenCVTest_gpu" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

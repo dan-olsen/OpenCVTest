@@ -5,9 +5,9 @@
  *      Author: daniel
  */
 
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/opencv.hpp>
-#include <opencv2/gpu/gpu.hpp>
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/opencv.hpp"
+#include "opencv2/gpu/gpu.hpp"
 
 #include <iostream>
 #include <stdio.h>
@@ -18,7 +18,7 @@
 void MatchingMethod(int argc, char** argv);
 
 /** @function main */
-int main( int argc, char** argv )
+int main(int argc, char** argv)
 {
   /// Create windows
   cv::namedWindow("Source Image", CV_WINDOW_NORMAL );
@@ -31,9 +31,9 @@ int main( int argc, char** argv )
 void MatchingMethod(int argc, char** argv)
 {
 	cv::Mat image;
-	std::vector<cv::Mat *> templates;
-	std::vector<cv::gpu::GpuMat *> gpuTemplates;
-	std::vector<cv::gpu::GpuMat *> gpuResults;
+	std::vector<cv::Mat> templates;
+	std::vector<cv::gpu::GpuMat> gpuTemplates;
+	std::vector<cv::gpu::GpuMat> gpuResults;
 	std::vector<cv::Point> matchLocs;
 	std::chrono::time_point<std::chrono::steady_clock> load_start, load_end, upload_start, upload_end, exec_start, exec_end;
 
@@ -41,12 +41,22 @@ void MatchingMethod(int argc, char** argv)
 
 	image = cv::imread(argv[1]);
 
+	if (image.empty())
+	{
+		std::cout << "Could not load image" << std::endl;
+	}
+
 	//Load Template Loop
 	for(int i = 2; i < argc; i++)
 	{
 		cv::Mat temp = cv::imread(argv[i]);
 
-		templates.push_back(&temp);
+		if (temp.empty())
+		{
+			std::cout << "Could not load template" << std::endl;
+		}
+
+		templates.push_back(temp);
 
 	}
 
@@ -58,10 +68,20 @@ void MatchingMethod(int argc, char** argv)
 
 	cv::gpu::GpuMat gpuImage(image);
 
-
-	for(int i = 2, j = 0; i < argc; i++)
+	if (gpuImage.empty())
 	{
-		cv::gpu::GpuMat *gpuTemp = new cv::gpu::GpuMat(*templates[j]);
+		std::cout << "Could not upload image" << std::endl;
+	}
+
+
+	for(int i = 2, j = 0; i < argc; i++, j++)
+	{
+		cv::gpu::GpuMat gpuTemp(templates[j]);
+
+		if (gpuImage.empty())
+		{
+			std::cout << "Could not upload template" << std::endl;
+		}
 
 		gpuTemplates.push_back(gpuTemp);
 	}
@@ -71,13 +91,13 @@ void MatchingMethod(int argc, char** argv)
 	exec_start = std::chrono::steady_clock::now();
 
 	/// Do the Matching
-	for(int i = 2, j = 0; i < argc; i++)
+	for(int i = 2, j = 0; i < argc; i++, j++)
 	{
 		cv::gpu::GpuMat result;
 
-		cv::gpu::matchTemplate(gpuImage, *gpuTemplates[j], result, CV_TM_CCORR_NORMED);
+		cv::gpu::matchTemplate(gpuImage, gpuTemplates[j], result, CV_TM_CCORR_NORMED);
 
-		gpuResults.push_back(&result);
+		gpuResults.push_back(result);
 
 		/// Localizing the best match with minMaxLoc
 		double maxVal;
@@ -97,22 +117,22 @@ void MatchingMethod(int argc, char** argv)
 	std::chrono::duration<double> elapsed_seconds_upload = upload_end - upload_start;
 	std::chrono::duration<double> elapsed_seconds_exec = exec_end - exec_start;
 
-	std::cout << "Load time: " << elapsed_seconds_load.count() << "s" << std::endl;
-	std::cout << "Upload time: " << elapsed_seconds_upload.count() << "s" << std::endl;
-	std::cout << "Exec time: " << elapsed_seconds_exec.count() << "s" << std::endl;
+	std::cout << "Load time: " << elapsed_seconds_load.count() << " s" << std::endl;
+	std::cout << "Upload time: " << elapsed_seconds_upload.count() << " s" << std::endl;
+	std::cout << "Exec time: " << elapsed_seconds_exec.count() << " s" << std::endl;
 
 	std::chrono::duration<double> elapsed_seconds = elapsed_seconds_load + elapsed_seconds_upload + elapsed_seconds_exec;
 
-	std::cout << "Exec time: " << elapsed_seconds.count() << "s" << std::endl;
+	std::cout << "Total Exec time: " << elapsed_seconds.count() << " s" << std::endl;
 
-	for(int i = 2, j = 0; i < argc; i++)
+	for(int i = 2, j = 0; i < argc; i++, j++)
 	{
 		/// Source image to display
 		cv::Mat img_display;
 		image.copyTo(img_display);
 
 		/// Show me what you got
-		cv::rectangle(img_display, matchLocs[j], cv::Point( matchLocs[j].x + templates[j]->cols , matchLocs[j].y + templates[j]->rows ), cv::Scalar(0, 0, 204), 4, 8, 0 );
+		cv::rectangle(img_display, matchLocs[j], cv::Point( matchLocs[j].x + templates[j].cols , matchLocs[j].y + templates[j].rows ), cv::Scalar(0, 0, 204), 4, 8, 0 );
 
 		imshow( "Source Image", img_display );
 
