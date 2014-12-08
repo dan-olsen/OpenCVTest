@@ -16,81 +16,106 @@
 using namespace std;
 using namespace cv;
 
-/// Global Variables
-Mat img; Mat templ; Mat result;
-string image_window = "Source Image";
-string result_window = "Result window";
-
-int match_method;
-int max_Trackbar = 5;
-
 /// Function Headers
-void MatchingMethod( int, void* );
+void MatchingMethod(int argc, char** argv);
 
 /** @function main */
 int main( int argc, char** argv )
 {
-  /// Load image and template
-  img = imread( argv[1], 1 );
-  templ = imread( argv[2], 1 );
+	/// Create windows
+	cv::namedWindow("Result Window", CV_WINDOW_NORMAL );
 
-  /// Create windows
-  namedWindow( image_window, CV_WINDOW_NORMAL );
-  namedWindow( result_window, CV_WINDOW_NORMAL );
+	MatchingMethod(argc, argv);
 
-  MatchingMethod( 0, 0 );
-
-  waitKey(0);
-  return 0;
+	return 0;
 }
 
 /**
  * @function MatchingMethod
  * @brief Trackbar callback
  */
-void MatchingMethod( int, void* )
+void MatchingMethod(int argc, char** argv)
 {
-  /// Source image to display
-  Mat img_display;
-  img.copyTo( img_display );
+	cv::Mat image;
+	std::vector<cv::Mat> templates;
+	std::vector<cv::Point> matchLocs;
+	std::vector<cv::Mat> results;
+	std::chrono::time_point<std::chrono::steady_clock> load_start, load_end, upload_start, upload_end, exec_start, exec_end;
 
-  /// Create the result matrix
-  //int result_cols =  img.cols - templ.cols + 1;
-  //int result_rows = img.rows - templ.rows + 1;
+	load_start = std::chrono::steady_clock::now();
 
-  //result.create( result_cols, result_rows, CV_32FC1 );
-  //result.create( img.cols, img.rows, CV_32FC1 );
+	image = cv::imread(argv[1]);
 
-  std::chrono::time_point<std::chrono::steady_clock> start, end;
+	if (image.empty())
+	{
+		std::cout << "Could not load image" << std::endl;
+	}
 
-  start = std::chrono::steady_clock::now();
+	//Load Template Loop
+	for(int i = 2; i < argc; i++)
+	{
+		cv::Mat temp = cv::imread(argv[i]);
 
-  /// Do the Matching and Normalize
-  matchTemplate( img, templ, result, CV_TM_CCORR_NORMED);
-  //normalize( result, result, 0, 1, NORM_MINMAX, -1, Mat() );
+		if (temp.empty())
+		{
+			std::cout << "Could not load template" << std::endl;
+		}
 
-  end = std::chrono::steady_clock::now();
+		templates.push_back(temp);
 
-  std::chrono::duration<double> elapsed_seconds = end - start;
+	}
+
+	load_end = std::chrono::steady_clock::now();
+
+	exec_start = std::chrono::steady_clock::now();
+
+	/// Do the Matching
+	for(int i = 2, j = 0; i < argc; i++, j++)
+	{
+		cv::Mat result;
+
+		cv::matchTemplate(image, templates[j], result, CV_TM_CCORR_NORMED);
+
+		results.push_back(result);
+
+		/// Localizing the best match with minMaxLoc
+		double maxVal;
+		cv::Point maxLoc;
+		cv::Point matchLoc;
+
+		cv::minMaxLoc( result, 0, &maxVal, 0, &maxLoc);
+
+		matchLoc = maxLoc;
+
+		matchLocs.push_back(matchLoc);
+	}
+
+	exec_end = std::chrono::steady_clock::now();
+
+	std::chrono::duration<double> elapsed_seconds_load = load_end - load_start;
+	std::chrono::duration<double> elapsed_seconds_upload = upload_end - upload_start;
+	std::chrono::duration<double> elapsed_seconds_exec = exec_end - exec_start;
+
+	std::cout << "Load time: " << elapsed_seconds_load.count() << " s" << std::endl;
+	std::cout << "Upload time: " << elapsed_seconds_upload.count() << " s" << std::endl;
+	std::cout << "Exec time: " << elapsed_seconds_exec.count() << " s" << std::endl;
+
+	std::chrono::duration<double> elapsed_seconds = elapsed_seconds_load + elapsed_seconds_upload + elapsed_seconds_exec;
+
+	std::cout << "Total Exec time: " << elapsed_seconds.count() << " s" << std::endl;
 
 
-  std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
+	for(int i = 2, j = 0; i < argc; i++, j++)
+	{
+		/// Source image to display
+		cv::Mat img_display;
+		image.copyTo(img_display);
 
-  /// Localizing the best match with minMaxLoc
-  double maxVal;
-  Point maxLoc;
-  Point matchLoc;
+		/// Show me what you got
+		cv::rectangle(img_display, matchLocs[j], cv::Point( matchLocs[j].x + templates[j].cols , matchLocs[j].y + templates[j].rows ), cv::Scalar(0, 0, 204), 4, 8, 0 );
 
-  minMaxLoc( result, 0, &maxVal, 0, &maxLoc, Mat() );
+		imshow("Result Window", img_display );
 
-  matchLoc = maxLoc;
-
-  /// Show me what you got
-  rectangle( img_display, matchLoc, Point( matchLoc.x + templ.cols , matchLoc.y + templ.rows ), Scalar(0, 0, 204), 4, 8, 0 );
-  rectangle( result, matchLoc, Point( matchLoc.x + templ.cols , matchLoc.y + templ.rows ), Scalar(0, 0, 204), 2, 8, 0 );
-
-  imshow( image_window, img_display );
-  imshow( result_window, result );
-
-  return;
+		cv::waitKey(0);
+	}
 }
